@@ -21,6 +21,8 @@ class Pen:
     def __init__(self, canvas, commands):
         self.canvas = canvas
         self.commands = {}
+        self.points = [(0,0)]
+        self.angle = 0
         for line in commands.split('\n'):
             c, cmd = [x.strip() for x in line.split(':')]
             method, arg = [x.strip() for x in cmd.split(' ')]
@@ -32,8 +34,6 @@ class Pen:
                 'rotate': self.rotate,
                 'nothing': self.nothing,
                 }
-        self.turtle =  Turtle()
-        self.turtle.speed(0)
         self.x = 0
         self.y = 0
 
@@ -49,13 +49,23 @@ class Pen:
         self.cdict[method[0]](int(method[1]))
 
     def forward(self, dis=10):
-        self.turtle.forward(dis)
+        x, y = self.points[-1]
+        xn = x + dis*np.cos(self.get_rad())
+        yn = y + dis*np.sin(self.get_rad())
+        self.points.append((xn,yn))
 
     def backward(self, dis=10):
-        self.turtle.backward(dis)
+        x, y = self.points[-1]
+        xn = x - dis*np.cos(self.get_rad())
+        yn = y - dis*np.sin(self.get_rad())
+        self.points.append((xn,yn))
+
+    def get_rad(self):
+        return self.angle * (np.pi/180)
     
     def rotate(self, angle=60):
-        self.turtle._rotate(angle)
+        self.angle += angle
+        self.angle = self.angle % 360
 
 class LSystem:
     def __init__(self, axiom, s):
@@ -107,6 +117,7 @@ class Main:
         imbox.pack_start(self.canvas, True, True, 1)
         self.progress = builder.get_object("progressbar")
         self.builder = builder
+        self.exit_thread = False
         self.pen = None
 
         self.notebook = builder.get_object("notebook")
@@ -137,12 +148,20 @@ class Main:
             it = int(self.builder.get_object("iteration_adj").get_value())
             b = self.builder.get_object("commands_buffer")
             cmds = b.get_text(b.get_start_iter(), b.get_end_iter(), False) 
-            self.lindemayer(axiom, rules, it, cmds)
+
+            Thread(target=self.lindemayer, args=(axiom, rules, it, cmds)).start()
 
     def plot_canvas(self, image, lb, rt):
         self.axis.clear()
         self.axis.imshow(image, extent=(lb.real, rt.real, lb.imag, rt.imag))
         self.axis.set_title(self.builder.get_object("title").get_text())
+        self.canvas.draw_idle()
+
+    def plot_line(self, points):
+        self.axis.clear()
+        x = [x[0] for x in points]
+        y = [y[1] for y in points]
+        self.axis.plot(x,y)
         self.canvas.draw_idle()
 
     def julia(self, lb, rt, func, it, res):
@@ -163,6 +182,9 @@ class Main:
             zeros[(abs(z)>50) & (zeros==0)] = i
             z[abs(z)>50] = 0
             GObject.idle_add(self.progress.set_fraction, (i+1)/it)
+            if self.exit_thread:
+                self.exit_thread = False
+                return
         zeros[zeros==0] = it + 1
         self.plot_canvas(zeros.T, lb, rt)
     
@@ -184,6 +206,9 @@ class Main:
             z = func(z,c)
             zeros[(abs(z)>2) & (zeros==0)] = i
             GObject.idle_add(self.progress.set_fraction, (i+1)/it)
+            if self.exit_thread:
+                self.exit_thread = False
+                return
         zeros[abs(z)<2] = it + 1
         self.plot_canvas(zeros.T, lb, rt)
 
@@ -193,12 +218,22 @@ class Main:
             ls.next_gen()
             GObject.idle_add(self.progress.set_fraction, (i+1)/it)
         pen = Pen(None, commands) if self.pen == None else self.pen
-        pen.turtle.clear()
-        self.pen = pen
-        pen.exec_str(ls.string)
+        i = 0
+        for s in ls.string:
+            i += 1
+            pen.exec_cmd(s)
+            GObject.idle_add(self.progress.set_fraction, i/len(ls.string))
+            if self.exit_thread:
+                self.exit_thread = False
+                return
+        GObject.idle_add(self.plot_line, pen.points)
+    
 
     def quit(self, window):
         Gtk.main_quit()
+
+    def kill(self, widget):
+        self.exit_thread = True
 
 
 if __name__ == "__main__":

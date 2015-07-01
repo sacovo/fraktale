@@ -49,6 +49,20 @@ B: forward 10
               </packing>
             </child>
             <child>
+              <object class="GtkToolButton" id="toolbutton2">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">toolbutton2</property>
+                <property name="use_underline">True</property>
+                <property name="stock_id">gtk-cancel</property>
+                <signal name="clicked" handler="kill" swapped="no"/>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="homogeneous">True</property>
+              </packing>
+            </child>
+            <child>
               <object class="GtkToolButton" id="quit">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
