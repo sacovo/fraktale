@@ -21,7 +21,7 @@ class Pen:
     def __init__(self, canvas, commands):
         self.canvas = canvas
         self.commands = {}
-        self.points = [(0,0)]
+        self.segments = []
         self.angle = 0
         for line in commands.split('\n'):
             c, cmd = [x.strip() for x in line.split(':')]
@@ -32,14 +32,31 @@ class Pen:
                 'forward': self.forward,
                 'backward': self.backward,
                 'rotate': self.rotate,
+                'move': self.move,
                 'nothing': self.nothing,
+                'store': self.store_,
+                'pop': self.pop,
                 }
+        self.store = []
         self.x = 0
         self.y = 0
+
+    def move(self, dis):
+        x, y = self.x, self.y
+        xn = x + dis*np.cos(self.get_rad())
+        yn = y + dis*np.sin(self.get_rad())
+        self.x = xn
+        self.y = yn
 
     def exec_str(self, string):
         for c in string:
             self.exec_cmd(c)
+
+    def store_(self, cmd):
+        self.store.append((self.x, self.y, self.angle))
+    
+    def pop(self, cmd):
+        self.x, self.y, self.angle = self.store.pop()
 
     def nothing(self, cmd):
         pass
@@ -49,16 +66,20 @@ class Pen:
         self.cdict[method[0]](int(method[1]))
 
     def forward(self, dis=10):
-        x, y = self.points[-1]
+        x, y = self.x, self.y
         xn = x + dis*np.cos(self.get_rad())
         yn = y + dis*np.sin(self.get_rad())
-        self.points.append((xn,yn))
+        self.segments.append(((x, y), (xn,yn)))
+        self.x = xn
+        self.y = yn
 
     def backward(self, dis=10):
-        x, y = self.points[-1]
+        x, y = self.x, self.y
         xn = x - dis*np.cos(self.get_rad())
         yn = y - dis*np.sin(self.get_rad())
-        self.points.append((xn,yn))
+        self.segments.append(((x,y), (xn,yn)))
+        self.x = xn
+        self.y = yn
 
     def get_rad(self):
         return self.angle * (np.pi/180)
@@ -157,11 +178,13 @@ class Main:
         self.axis.set_title(self.builder.get_object("title").get_text())
         self.canvas.draw_idle()
 
-    def plot_line(self, points):
+    def plot_line(self, segments):
         self.axis.clear()
-        x = [x[0] for x in points]
-        y = [y[1] for y in points]
-        self.axis.plot(x,y)
+        points = []
+        for s in segments:
+            points += [(s[0][0],s[1][0]),(s[0][1],s[1][1]),'b-']
+
+        self.axis.plot(*points)
         self.canvas.draw_idle()
 
     def julia(self, lb, rt, func, it, res):
@@ -226,7 +249,7 @@ class Main:
             if self.exit_thread:
                 self.exit_thread = False
                 return
-        GObject.idle_add(self.plot_line, pen.points)
+        GObject.idle_add(self.plot_line, pen.segments)
     
 
     def quit(self, window):
